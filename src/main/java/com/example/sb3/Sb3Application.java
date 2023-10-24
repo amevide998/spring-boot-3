@@ -11,6 +11,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
 
@@ -38,59 +40,86 @@ public class Sb3Application {
         tt.afterPropertiesSet();
 
 
-        var cs = new DefaultCustomerService(template, tt);
+        var cs = new TransactionalCustomerService(template, tt);
 
         var yamato = cs.add("yamato");
+//        var geto = cs.add("geto");
         var all = cs.all();
         Assert.state(all.contains(yamato), () -> "yamato not found");
 
         all.forEach(c-> log.info(c.toString()));
 
     }
+}
 
+class TransactionalCustomerService extends CustomerService {
+
+    private final TransactionTemplate tt;
+
+    TransactionalCustomerService(JdbcTemplate template, TransactionTemplate tt) {
+        super(template);
+        this.tt = tt;
+    }
+
+    @Override
+    Customer add(String name) {
+        return this.tt.execute(status -> super.add(name));
+    }
+
+    @Override
+    Customer byId(Integer id) {
+        return this.tt.execute(status -> super.byId(id));
+    }
+
+    @Override
+    Collection<Customer> all() {
+        return this.tt.execute(status -> super.all());
+    }
 }
 
 @Slf4j
-class DefaultCustomerService {
+class CustomerService {
     private final JdbcTemplate template;
-    private final TransactionTemplate tt;
 
     private final RowMapper<Customer> rowMapper = (rs, rowNum)
             -> new Customer(rs.getInt("id"), rs.getString("name"));
 
-    DefaultCustomerService(JdbcTemplate template, TransactionTemplate tt) {
+    CustomerService(JdbcTemplate template) {
         this.template = template;
-        this.tt = tt;
 
     }
 
     Customer add(String name){
-
-
-
-        var al = new ArrayList<Map<String, Object>>();
-        var hm = new HashMap<String, Object>() {};
-        hm.put("id", Long.class);
-        al.add(hm);
-        var keyholder = new GeneratedKeyHolder(al);
-        log.info("cek keyholder {}", keyholder.getKeyList());
-        this.template.update(con -> {
-                            PreparedStatement ps = con.prepareStatement("insert into customers (name) values(?)", Statement.RETURN_GENERATED_KEYS);
-                            ps.setString(1, name);
-                            log.info("cek keyholder {}", keyholder.getKeyList());
-                            return ps;
-                },
-                keyholder
-        );
-        var generatedId = Objects.requireNonNull(keyholder.getKeys()).get("id");
-        log.info("generated {}", generatedId);
-        Assert.state(generatedId instanceof Number, () -> "generatedId is not a number");
-        Number number = (Number) generatedId;
-        return byId(number.intValue());
+            var al = new ArrayList<Map<String, Object>>();
+            var hm = new HashMap<String, Object>() {};
+            hm.put("id", Long.class);
+            al.add(hm);
+            var keyholder = new GeneratedKeyHolder(al);
+            log.info("cek keyholder {}", keyholder.getKeyList());
+            this.template.update(con -> {
+                        PreparedStatement ps = con
+                                .prepareStatement
+                                        ("""
+                                            insert into customers (name) values(?)
+                                            on conflict on constraint customers_name_key do update set name = excluded.name
+                                            """, Statement.RETURN_GENERATED_KEYS);
+                        ps.setString(1, name);
+                        log.info("cek keyholder {}", keyholder.getKeyList());
+                        return ps;
+                    },
+                    keyholder
+            );
+            var generatedId = Objects.requireNonNull(keyholder.getKeys()).get("id");
+            log.info("generated {}", generatedId);
+            Assert.state(generatedId instanceof Number, () -> "generatedId is not a number");
+            Number number = (Number) generatedId;
+            Assert.isTrue(!name.startsWith("geto"), () -> "name should not start with geto");
+            return byId(number.intValue());
     }
 
     Customer byId(Integer id){
-        return this.template.queryForObject("select id, name from customers where id = ?", this.rowMapper, id);
+        return template.queryForObject(
+                "select id, name from customers where id = ?", rowMapper, id);
     }
 
     Collection<Customer> all(){
@@ -98,28 +127,6 @@ class DefaultCustomerService {
     }
 }
 
-class TransactionalDefaultCustomerService extends DefaultCustomerService {
 
-    TransactionalDefaultCustomerService(JdbcTemplate template, TransactionTemplate tt) {
-        super(template, tt);
-    }
-
-    @Override
-    Customer add(String name) {
-        return super.add(name);
-    }
-
-    @Override
-    Customer byId(Integer id) {
-        return super.byId(id);
-    }
-
-    @Override
-    Collection<Customer> all() {
-        return super.all();
-    }
-
-
-}
 
 record Customer (Integer id, String name) {}
