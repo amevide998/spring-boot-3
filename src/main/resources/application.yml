@@ -1,16 +1,16 @@
-#
-#spring:
-#  datasource:
-#    url: jdbc:postgresql://db.wpjfqirouzfglvfdhfba.supabase.co:5432/postgres
-#    username: postgres
-#    password: 0n9Evswhohpk4pKe
-#    driver-class-name: org.postgresql.Driver
-#  jpa:
-#    hibernate:
-#      ddl-auto: create-drop
-#    show-sql: false
-#    properties:
-#      hibernate:
-#        format_sql: true
-#    database: postgresql
-#    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+spring:
+  datasource:
+    url: jdbc:postgresql://db.wpjfqirouzfglvfdhfba.supabase.co:5432/postgres
+    username: postgres
+    password: 2CSjLBnkNI65ebJW
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect

@@ -7,6 +7,9 @@ import org.springframework.aop.framework.ProxyFactoryBean;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.sendgrid.SendGridProperties;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.core.RowMapper;
@@ -31,6 +34,26 @@ import java.util.*;
 
 @Slf4j
 public class Sb3Application {
+
+
+
+    public static void main(String[] args) {
+
+        var applicationContext = new AnnotationConfigApplicationContext(DataConfiguration.class);
+        var cs = applicationContext.getBean(DefaultCustomerService.class);
+
+        var yamato = cs.add("yamato");
+//        var geto = cs.add("geto");
+        var all = cs.all();
+        Assert.state(all.contains(yamato), () -> "yamato not found");
+
+        all.forEach(c-> log.info(c.toString()));
+
+    }
+}
+
+@Configuration
+class DataConfiguration {
 
     private static DefaultCustomerService transactionalCustomerService(
             TransactionTemplate tt,
@@ -66,13 +89,13 @@ public class Sb3Application {
                 var method = invocation.getMethod();
                 var args = invocation.getArguments();
                 return tt.execute(status -> {
-                            try {
-                                return method.invoke(delegate, args);
-                            } catch (IllegalAccessException e) {
-                                throw new RuntimeException(e);
-                            } catch (InvocationTargetException e) {
-                                throw new RuntimeException(e);
-                            }});
+                    try {
+                        return method.invoke(delegate, args);
+                    } catch (IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    } catch (InvocationTargetException e) {
+                        throw new RuntimeException(e);
+                    }});
             }
         });
 
@@ -80,32 +103,46 @@ public class Sb3Application {
 
     }
 
-    public static void main(String[] args) {
+    @Bean
+    DefaultCustomerService defaultCustomerService(TransactionTemplate tt, JdbcTemplate jdbcTemplate){
+        return transactionalCustomerService(tt, new DefaultCustomerService(jdbcTemplate));
+
+    }
+
+    @Bean
+    TransactionTemplate transactionTemplate(PlatformTransactionManager ptm){
+        var tt = new TransactionTemplate(ptm);
+        tt.afterPropertiesSet();
+        return tt;
+    }
+
+    @Bean
+    DataSourceTransactionManager platformTransactionManager(DataSource dataSource){
+        var ptm = new DataSourceTransactionManager(dataSource);
+        ptm.afterPropertiesSet();
+        return ptm;
+    }
+
+    @Bean
+    JdbcTemplate template(DataSource dataSource){
+        var template = new JdbcTemplate(dataSource);
+        template.afterPropertiesSet();
+        return template;
+    }
+
+
+    @Bean
+    DriverManagerDataSource dataSource(){
         var dataSource = new DriverManagerDataSource(
                 "jdbc:postgresql://db.wpjfqirouzfglvfdhfba.supabase.co:5432/postgres",
                 "postgres",
-                "0n9Evswhohpk4pKe"
+                "2CSjLBnkNI65ebJW"
         );
+
         dataSource.setDriverClassName(Driver.class.getName());
-
-        var template = new JdbcTemplate(dataSource);
-        template.afterPropertiesSet();
-
-        var ptm = new DataSourceTransactionManager(dataSource);
-
-        var tt = new TransactionTemplate(ptm);
-        tt.afterPropertiesSet();
-
-        var cs = transactionalCustomerService(tt, new DefaultCustomerService(template));
-
-        var yamato = cs.add("yamato");
-//        var geto = cs.add("geto");
-        var all = cs.all();
-        Assert.state(all.contains(yamato), () -> "yamato not found");
-
-        all.forEach(c-> log.info(c.toString()));
-
+        return dataSource;
     }
+
 }
 
 
