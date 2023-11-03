@@ -39,7 +39,9 @@ public class Sb3Application {
 
     public static void main(String[] args) {
 
-        var applicationContext = new AnnotationConfigApplicationContext(DataConfiguration.class);
+        var applicationContext = new AnnotationConfigApplicationContext();
+        applicationContext.register(DataConfiguration.class);
+        applicationContext.refresh();
         var cs = applicationContext.getBean(DefaultCustomerService.class);
 
         var yamato = cs.add("yamato");
